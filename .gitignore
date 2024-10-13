@@ -72,6 +72,12 @@ target/
 # pyenv
 .python-version
 
+# PDM
+.pdm-python
+
+# VScode
+.vscode
+
 # celery beat schedule file
 celerybeat-schedule
 

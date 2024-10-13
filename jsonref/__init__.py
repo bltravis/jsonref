@@ -15,7 +15,11 @@ try:
     if not callable(requests.Response.json):
         requests = None
 except ImportError:
-    requests = None
+    # If requests is not available, we will try to use httpx
+    try:
+        import httpx as requests
+    except ImportError:
+        requests = None
 
 __version__ = "1.1.0"
 
@@ -47,7 +51,13 @@ class JsonRef(LazyProxy):
 
     @classmethod
     def replace_refs(
-        cls, obj, base_uri="", loader=None, jsonschema=False, load_on_repr=True
+        cls,
+        obj,
+        base_uri="",
+        loader=None,
+        jsonschema=False,
+        load_on_repr=True,
+        filter_func=None,
     ):
         """
         .. deprecated:: 0.4
@@ -70,6 +80,9 @@ class JsonRef(LazyProxy):
         :param load_on_repr: If set to ``False``, :func:`repr` call on a
             :class:`JsonRef` object will not cause the reference to be loaded
             if it hasn't already. (defaults to ``True``)
+        :param filter_func: A function to be run on `obj` before
+            `replace_refs`. The take the object as an argument and return
+            the object to be processed. (defaults to ``None``)
 
         """
         return replace_refs(
@@ -78,6 +91,7 @@ class JsonRef(LazyProxy):
             loader=loader,
             jsonschema=jsonschema,
             load_on_repr=load_on_repr,
+            filter_func=filter_func,
         )
 
     def __init__(
@@ -290,6 +304,7 @@ def replace_refs(
     merge_props=False,
     proxies=True,
     lazy_load=True,
+    filter_func=None,
 ):
     """
     Returns a deep copy of `obj` with all contained JSON reference objects
@@ -320,6 +335,9 @@ def replace_refs(
     :param lazy_load: When proxy objects are used, and this is `True`, the
         references will not be resolved until that section of the JSON
         document is accessed. (defaults to ``True``)
+    :param filter_func: A function to be run on `obj` before
+        `replace_refs`. The take the object as an argument and return
+        the object to be processed. (defaults to ``None``)
 
     """
     result = _replace_refs(
@@ -332,6 +350,7 @@ def replace_refs(
         store=URIDict(),
         path=(),
         recursing=False,
+        filter_func=filter_func,
     )
     if not proxies:
         _walk_refs(result, lambda r: r.__subject__, replace=True)
@@ -351,7 +370,9 @@ def _replace_refs(
     store,
     path,
     recursing,
+    filter_func=None,
 ):
+    obj = filter_func(obj) if filter_func else obj
     base_uri, frag = urlparse.urldefrag(base_uri)
     store_uri = None  # If this does not get set, we won't store the result
     if not frag and not recursing:
@@ -376,6 +397,7 @@ def _replace_refs(
                 store=store,
                 path=path + (k,),
                 recursing=True,
+                filter_func=filter_func,
             )
             for k, v in obj.items()
         }
@@ -391,6 +413,7 @@ def _replace_refs(
                 store=store,
                 path=path + (i,),
                 recursing=True,
+                filter_func=filter_func,
             )
             for i, v in enumerate(obj)
         ]
